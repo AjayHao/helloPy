@@ -1,0 +1,8 @@
+.project
+.pydevproject
+*.pyc
+*.pyo
+*.sqlite3
+.DS_Store
+.settings/org.eclipse.core.resources.prefs
+.idea/
