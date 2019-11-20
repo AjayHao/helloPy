@@ -2,18 +2,28 @@
 
 import sys
 
-def fibonacci(n): # 生成器函数 - 斐波那契
+
+# 生成器函数 - 斐波那契
+def fibonacci(n):
     a, b, counter = 0, 1, 0
     while True:
-        if (counter > n):
+        if counter > n:
             return
         yield a
         a, b = b, a + b
         counter += 1
-f = fibonacci(10) # f 是一个迭代器，由生成器返回生成
 
+
+# f 是一个迭代器，由生成器返回生成
+f = fibonacci(10)
 while True:
     try:
-        print (next(f), end=" ")
+        print(next(f), end=" ")
     except StopIteration:
-        sys.exit()
+        break
+
+print("")
+
+f2 = fibonacci(10)
+for a in f2:
+    print(a, end=" ")
