@@ -11,5 +11,5 @@ print ("[get()] dict:", dict.get('Sex', 'Male'))
 dict.setdefault('Sex', 'Male')
 print ("after [setdefault()] dict:", dict)
 # 类似extend
-dict.update({'City': 'New York'})
+dict.update({'City': 'New York', 'Age': 8})
 print ("[update()] dict:", dict)

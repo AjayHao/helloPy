@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 
-import sys
-
 
 # 生成器函数 - 斐波那契
 def fibonacci(n):
