@@ -6,3 +6,4 @@
 .DS_Store
 .settings/org.eclipse.core.resources.prefs
 .idea/
+/build/**
