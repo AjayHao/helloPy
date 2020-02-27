@@ -119,7 +119,10 @@ def get_contract_detail(detail_obj):
 # 抓取跟踪信息
 def get_process_track(detail_obj, ret):
     docid = detail_obj['TODONO']
-    open_url = 'http://oa.gtja.net/newoa/htxy_2020.nsf/TraceDoc?OpenAgent&Time='+str(time.time)+'&DocID='+docid
+    url = detail_obj['TODOURL']
+    sidx = url.find('nsf')
+    track_prefix = url[0:sidx]
+    open_url = track_prefix+'nsf/TraceDoc?OpenAgent&Time='+str(time.time)+'&DocID='+docid
     cookies = {'LtpaToken': ltpa_token_string}
     response = requests.get(url=open_url, cookies=cookies, headers=oa_headers)
     response.encoding = 'gbk'
@@ -133,13 +136,13 @@ def get_process_track(detail_obj, ret):
         write_file(output_path + detail_html_prefix + detail_obj['TODOTITLE'] + ".html", htmlstr)
     # 解析详情html
     htmlobj = pq(htmlstr)
-    tds = htmlobj('table.docoumentTable tr td').items()
+    tds = htmlobj('table.docoumentTable tr td:nth-child(1)').items()
     for td in tds:
-        if td.text() == '起草':
-            ret['qcrfcsj'] = td.next().next().text()
+        if (td.text() == '起草' or td.html() == '起草') and ret['qcrfcsj'] == '':
+            ret['qcrfcsj'] = td.next().next().next().text()
 
-        if td.text() == '江伟':
-            ret['jwzfcsj'] = td.prev().prev().text()
+        if td.text() == '公司领导批示' or td.html() == '公司领导批示':
+            ret['jwzfcsj'] = td.next().next().next().text()
 
         if ret['qcrfcsj'] != '' and ret['jwzfcsj'] != '':
             break
@@ -151,7 +154,7 @@ def get_process_track(detail_obj, ret):
 
 # 输出中间结果（调试用）
 def write_file(fullpath, text):
-    f = open(file=fullpath, mode='w', encoding='utf8')
+    f = open(file=fullpath, mode='w', encoding='gbk')
     f.write(text)
     # 关闭打开的文件
     f.close()
@@ -162,7 +165,7 @@ def export_as_csv(data_list):
     with open(output_path + 'OA流程拉取结果.csv', 'w', newline='') as csvfile:
         fieldnames = ['qcrfcsj', 'title', 'sjjbr', 'ngr', 'jwzfcsj']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'ngr': '序号', 'sjjbr': '起草人处理发出时间', 'title': '标题', 'qcrfcsj': '实际经办人', 'jwzfcsj': '江伟总发出时间'})
+        writer.writerow({'ngr': '拟稿人', 'sjjbr': '实际经办人', 'title': '标题', 'qcrfcsj': '起草人处理发出时间', 'jwzfcsj': '江伟总发出时间'})
         for item in data_list:
             writer.writerow(item)
 
@@ -173,6 +176,9 @@ def execute():
     global output_path
     global is_detail_output
     global file_type
+    # 先重置进度条
+    reset_progress()
+
     ltpa_token_string = ltpa_token_text.get(0.0, "end").strip().replace('\n', '').replace('\r', '')
     output_path = output_path_sv.get()
     if not output_path.endswith('/') and not output_path.endswith('\\'):
@@ -189,24 +195,26 @@ def execute():
     list_resp = get_contract_list()
     contract_list = list_resp['Data']
     #it = iter(contract_list)
-    # excelList
-    excel_list = []
-    idx = 1
+    # 需要对excel去重
+    excel_dict = {}
+    idx = 0
     total = len(contract_list)
-    while idx <= total:
+    while idx < total:
         item = contract_list[idx]
         ret_tuple = get_contract_detail(item)
         get_process_track(item, ret_tuple)
         if ret_tuple['jwzfcsj'] != '':
-            excel_list.append(ret_tuple)
-        refresh_progress(idx, total, ret_tuple['title'])
+            excel_dict[ret_tuple['title']] = ret_tuple
+        refresh_progress(idx+1, total, ret_tuple['title'])
         idx += 1
     # test
     #write_file(output_path + 'finalData.json', str(excel_list))
     # 输出excel
-    export_as_csv(excel_list)
+    export_as_csv(list(excel_dict.values()))
+    messagebox.showinfo("执行完毕", "解析完毕，请到下载目录查看结果")
 
 
+# 版本信息
 def show_version_info():
     messagebox.showinfo("版本信息", "Version：     V0.0.1.alpha\nDeveloper： Ajay Hao\n")
 
@@ -290,6 +298,13 @@ def draw_frame(root):
     #临时
     begin_date_sv.set('20200101')
     end_date_sv.set('20200131')
+
+
+# 恢复进度条
+def reset_progress():
+    global canvas
+    fill_line = canvas.create_rectangle(1.5, 1.5, 0, 23, width=0, fill="white")
+    canvas.coords(fill_line, (0, 0, CANVAS_LENGTH, 60))
 
 
 # 刷新进度条
