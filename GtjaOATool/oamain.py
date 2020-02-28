@@ -158,8 +158,12 @@ def get_process_track(detail_obj, ret):
         if (td.text() == '起草' or td.html() == '起草') and ret['qcrfcsj'] == '':
             ret['qcrfcsj'] = td.next().next().next().text()
 
-        if td.text() == '公司领导批示' or td.html() == '公司领导批示':
-            ret['jwzfcsj'] = td.next().next().next().text()
+        if file_type == 'OA006':
+            if td.text() == '公司领导批示' or td.html() == '公司领导批示':
+                ret['jwzfcsj'] = td.next().next().next().text()
+        else:
+            if td.text() == '公司领导批复' or td.html() == '公司领导批复':
+                ret['jwzfcsj'] = td.next().next().next().text()
 
         if ret['qcrfcsj'] != '' and ret['jwzfcsj'] != '':
             break
@@ -170,12 +174,12 @@ def get_process_track(detail_obj, ret):
 
 
 # 输出中间结果（调试用）
-def write_file(fullpath, text):
-    f = open(file=fullpath, mode='w', encoding='gbk')
+def write_file(path, text):
+    decoded_path = path.replace("\t", " ").replace("\x06", "").replace("\x05", "").replace("\x07", "")
+    f = open(file=decoded_path, mode='w', encoding='gbk')
     f.write(text)
     # 关闭打开的文件
     f.close()
-
 
 # 导出excel
 def export_as_csv(data_list):
@@ -391,4 +395,4 @@ def ui_frame():
 # 主程序调用
 if __name__ == '__main__':
     ui_frame()
-
+    #write_file("C:\\Users\\AjayHao\\Desktop\\contract\\【AA类】 · S22922，宁聚满天星，补充协议（四）.html", "哎哎哎")
