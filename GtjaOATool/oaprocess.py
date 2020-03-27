@@ -194,7 +194,6 @@ def execute():
 
         # 需要对excel去重
         #excel_dict = {}
-        excel_list = []
         export_csv_header()
         idx = 0
         total = len(contract_list)
@@ -211,6 +210,7 @@ def execute():
         messagebox.showinfo("执行完毕", "解析完毕，请到下载目录查看结果")
     finally:
         button.state(["!disabled"])
+
 
 # 版本信息
 def show_version_info():
