@@ -8,6 +8,11 @@ import time
 import requests
 import csv
 
+version_line = '\n\n-----------------------------\n'
+version_desc_arr = [
+    "V0.1.1 - 20200407: 调整“江伟总”为“公司领导”"
+]
+
 # 外部传入参数
 mainframe = None
 begin_date_sv = None
@@ -103,7 +108,7 @@ def get_contract_detail(detail_obj):
            'sjjbr': '',
            'title': detail_obj['TODOTITLE'],
            'qcrfcsj': '',
-           'jwzfcsj': ''}
+           'gsldfcsj': ''}
     open_url = detail_obj['TODOURL'].replace("editdocument", "opendocument")
     cookies = {'LtpaToken': ltpa_token_string}
     # 填抓包内容
@@ -134,7 +139,7 @@ def get_contract_detail(detail_obj):
 
 
 # 抓取跟踪信息
-def get_process_track(detail_obj, ret):
+def get_process_track(detail_obj, contract_obj):
     docid = detail_obj['TODONO']
     url = detail_obj['TODOURL']
     sidx = url.find('nsf')
@@ -155,22 +160,22 @@ def get_process_track(detail_obj, ret):
     htmlobj = pq(htmlstr)
     tds = htmlobj('table.docoumentTable tr td:nth-child(1)').items()
     for td in tds:
-        if (td.text() == '起草' or td.html() == '起草') and ret['qcrfcsj'] == '':
-            ret['qcrfcsj'] = td.next().next().next().text()
+        if (td.text() == '起草' or td.html() == '起草') and contract_obj['qcrfcsj'] == '':
+            contract_obj['qcrfcsj'] = td.next().next().next().text()
 
         if file_type == 'OA006':
             if td.text() == '公司领导批示' or td.html() == '公司领导批示':
-                ret['jwzfcsj'] = td.next().next().next().text()
+                contract_obj['gsldfcsj'] = td.next().next().next().text()
         else:
             if td.text() == '公司领导批复' or td.html() == '公司领导批复':
-                ret['jwzfcsj'] = td.next().next().next().text()
+                contract_obj['gsldfcsj'] = td.next().next().next().text()
 
-        if ret['qcrfcsj'] != '' and ret['jwzfcsj'] != '':
+        if contract_obj['qcrfcsj'] != '' and contract_obj['gsldfcsj'] != '':
             break
     # test
     # write_file('C:\\Users\\AjayHao\\Desktop\\contract\\ret.json', str(ret))
-    print(str(ret))
-    return ret
+    print(str(contract_obj))
+    return contract_obj
 
 
 # 输出中间结果（调试用）
@@ -184,9 +189,9 @@ def write_file(path, text):
 # 导出excel
 def export_as_csv(data_list):
     with open(output_path + 'OA流程拉取结果.csv', 'w', newline='') as csvfile:
-        fieldnames = ['qcrfcsj', 'title', 'sjjbr', 'ngr', 'jwzfcsj']
+        fieldnames = ['qcrfcsj', 'title', 'sjjbr', 'ngr', 'gsldfcsj']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'ngr': '拟稿人', 'sjjbr': '实际经办人', 'title': '标题', 'qcrfcsj': '起草人处理发出时间', 'jwzfcsj': '江伟总发出时间'})
+        writer.writerow({'ngr': '拟稿人', 'sjjbr': '实际经办人', 'title': '标题', 'qcrfcsj': '起草人处理发出时间', 'gsldfcsj': '公司领导发出时间'})
         for item in data_list:
             writer.writerow(item)
 
@@ -240,12 +245,12 @@ def execute():
             item = contract_list[idx]
             ret_tuple = get_contract_detail(item)
             get_process_track(item, ret_tuple)
-            if ret_tuple['jwzfcsj'] != '' and ret_tuple['jwzfcsj'] != '未结束':
+            if ret_tuple['gsldfcsj'] != '' and ret_tuple['gsldfcsj'] != '未结束':
                 #excel_dict[ret_tuple['title']] = ret_tuple
-                # 判断江伟总时间是否落在这个区间  "%Y-%m-%d %H:%M:%S"
-                t1 = datetime.datetime.strptime(ret_tuple['jwzfcsj'],'%Y-%m-%d %H:%M:%S')
-                jwzfcsj = t1.strftime("%Y%m")
-                if jwzfcsj == leader_date_str:
+                # 判断公司领导时间是否落在这个区间  "%Y-%m-%d %H:%M:%S"
+                t1 = datetime.datetime.strptime(ret_tuple['gsldfcsj'],'%Y-%m-%d %H:%M:%S')
+                gsldfcsj = t1.strftime("%Y%m")
+                if gsldfcsj == leader_date_str:
                     excel_list.append(ret_tuple)
             refresh_progress(idx+1, total, ret_tuple['title'])
             idx += 1
@@ -260,7 +265,7 @@ def execute():
 
 # 版本信息
 def show_version_info():
-    messagebox.showinfo("版本信息", "Version：     V0.0.1.alpha\nDeveloper： Ajay Hao\n")
+    messagebox.showinfo("版本信息", "Version：     V0.1.1\nDeveloper： Ajay Hao\n\n更新日志: \n" + version_line.join(version_desc_arr))
 
 
 ########  UI
@@ -323,7 +328,7 @@ def draw_frame(root):
     begin_date_entry.grid(row=row_at, column=1, sticky=W)
     end_date_label.grid(row=row_at, column=2, sticky=E)
     end_date_entry.grid(row=row_at, column=3, sticky=W)
-    Label(mainframe, text='江伟总审批通过时间(yyyyMM):', wraplength=110, justify='right').grid(row=row_at, column=4, sticky=E)
+    Label(mainframe, text='公司领导审批通过所在月(yyyyMM):', wraplength=110, justify='right').grid(row=row_at, column=4, sticky=E)
     ttk.Entry(mainframe, textvariable=leader_date_sv, width=10).grid(row=row_at, column=5, sticky=(W,E))
 
     row_at += 1
@@ -355,11 +360,11 @@ def draw_frame(root):
     # 初始化
     file_type_sv.set(1)
 
-    #临时
-    begin_date_sv.set('20200101')
-    end_date_sv.set('20200131')
-    leader_date_sv.set('202001')
-
+    enddate = datetime.datetime.now()
+    bgndate = enddate.replace(day=1)
+    begin_date_sv.set(bgndate.strftime("%Y%m%d"))
+    end_date_sv.set(enddate.strftime("%Y%m%d"))
+    leader_date_sv.set(bgndate.strftime("%Y%m"))
 
 # 恢复进度条
 def reset_progress():

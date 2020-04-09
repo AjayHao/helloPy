@@ -8,20 +8,24 @@ import time
 import requests
 import csv
 
+version_line = '\n\n-----------------------------\n'
+version_desc_arr = [
+    "V0.1.1 - 20200408: 导出列表增加“对方当事人名称”"
+]
+
 # 外部传入参数
 mainframe = None
 begin_date_sv = None
 end_date_sv = None
 session_id_sv = None
-file_type_sv = None
 output_path_sv = None
 canvas = None
 process_sv = None
 button = None
 output_path = ''
 ltpa_token_string = ''
-file_type = ''
-file_name = ''
+file_type = 'OA006'  #OA006-合同协议 OA012-印章申请
+file_name = 'OA流程跟踪数据拉取结果【合同协议】.csv'
 oa_headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36',
     'Host': 'oa.gtja.net'
@@ -47,7 +51,7 @@ def get_contract_list_by_page(page_no):
                 "begindate": begin_date_sv.get().strip(),
                 "enddate": end_date_sv.get().strip(),
                 "fileclass_main": "OA",
-                "fileclass": file_type,   #OA006-合同协议 OA012-印章申请
+                "fileclass": file_type,
                 "requester": "1"
             },
             "Type": "OA_TRANS_Q9902",
@@ -96,8 +100,31 @@ def get_contract_list():
     return total_list
 
 
+# 抓取合同详情
+def get_contract_detail(detail_obj):
+    contract_detail = {'dfdsrmc': ''}  # 对方当事人全称
+    open_url = detail_obj['TODOURL'].replace("editdocument", "opendocument")
+    cookies = {'LtpaToken': ltpa_token_string}
+    # 填抓包内容
+    # r.cookies.update(c)  # 更新cookies
+    response = requests.get(url=open_url, cookies=cookies, headers=oa_headers)
+    response.encoding = 'gbk'
+    htmlstr = response.text
+    # 需要输出详情
+    #if is_detail_output:
+    #    write_file(output_path + '【合同协议详情】-' + detail_obj['TODOTITLE'] +".html", htmlstr)
+    # 解析详情html
+    htmlobj = pq(htmlstr)
+    tds = htmlobj('table.tableForm:eq(2) tr td').items()
+    for td in tds:
+        if td.text() == '对方当事人全称':
+            contract_detail['dfdsrmc'] = td.next().text()
+            break
+    return contract_detail
+
+
 # 抓取跟踪信息
-def get_process_track(detail_obj):
+def get_process_track(detail_obj, contract_detail):
     docid = detail_obj['TODONO']
     url = detail_obj['TODOURL']
     sidx = url.find('nsf')
@@ -115,6 +142,7 @@ def get_process_track(detail_obj):
     for tr in trs:
         tds = tr.children()
         track_list.append({
+            'dfdsrmc': contract_detail['dfdsrmc'],
             'title': detail_obj['TODOTITLE'],
             'clhj': pq(tds[0]).text(),
             'clr': pq(tds[1]).text(),
@@ -140,15 +168,15 @@ def write_file(path, text):
 # 导出excel表头
 def export_csv_header():
     with open(output_path + file_name, 'w', newline='') as csvfile:
-        fieldnames = ['title', 'clhj', 'clr', 'ddsj', 'fcsj']
+        fieldnames = ['dfdsrmc', 'title', 'clhj', 'clr', 'ddsj', 'fcsj']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'title': '标题', 'clhj': '处理环节', 'clr': '处理人', 'ddsj': '到达时间', 'fcsj': '发出时间'})
+        writer.writerow({'dfdsrmc': '对方当事人名称', 'title': '标题', 'clhj': '处理环节', 'clr': '处理人', 'ddsj': '到达时间', 'fcsj': '发出时间'})
 
 
 # 导出excel
 def export_csv_content(data_list):
     with open(output_path + file_name, 'a', newline='') as csvfile:
-        fieldnames = ['title', 'clhj', 'clr', 'ddsj', 'fcsj']
+        fieldnames = ['dfdsrmc', 'title', 'clhj', 'clr', 'ddsj', 'fcsj']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         for item in data_list:
             writer.writerow(item)
@@ -158,8 +186,6 @@ def export_csv_content(data_list):
 def execute():
     global ltpa_token_string
     global output_path
-    global file_type
-    global file_name
 
     # 参数校验
     if begin_date_sv.get() == '' or \
@@ -180,17 +206,9 @@ def execute():
         if not output_path.endswith('/') and not output_path.endswith('\\'):
             output_path = output_path + '/'
             # 查询文件类型
-        if file_type_sv.get() == 1:
-            file_type = 'OA006'
-            file_name = 'OA流程跟踪数据拉取结果【合同协议】.csv'
-        else:
-            file_type = 'OA012'
-            file_name = 'OA流程跟踪数据拉取结果【印章申请】.csv'
 
         # 获得申请列表
         contract_list = get_contract_list()
-        #list_resp = get_contract_list()
-        #contract_list = list_resp['Data']
 
         # 需要对excel去重
         #excel_dict = {}
@@ -199,7 +217,8 @@ def execute():
         total = len(contract_list)
         while idx < total:
             item = contract_list[idx]
-            track_list = get_process_track(item)
+            contract_detail = get_contract_detail(item)
+            track_list = get_process_track(item, contract_detail)
             refresh_progress(idx+1, total, item['TODOTITLE'])
             export_csv_content(track_list)
             idx += 1
@@ -214,8 +233,7 @@ def execute():
 
 # 版本信息
 def show_version_info():
-    messagebox.showinfo("版本信息", "Version：     V0.0.1.alpha\nDeveloper： Ajay Hao\n")
-
+    messagebox.showinfo("版本信息", "Version：     V0.1.1\nDeveloper： Ajay Hao\n\n更新日志: \n" + version_line.join(version_desc_arr))
 
 ########  UI
 # 绘制菜单
@@ -231,7 +249,6 @@ def draw_frame(root):
     global begin_date_sv
     global end_date_sv
     global session_id_sv
-    global file_type_sv
     global ltpa_token_text
     global output_path_sv
     global canvas
@@ -240,7 +257,6 @@ def draw_frame(root):
     begin_date_sv = StringVar()
     end_date_sv = StringVar()
     session_id_sv = StringVar()
-    file_type_sv = IntVar()
     output_path_sv = StringVar()
     process_sv = StringVar()
     root.columnconfigure(0, weight=1)
@@ -259,46 +275,40 @@ def draw_frame(root):
     process_label = Label(mainframe, textvariable=process_sv)
     session_id_entry = ttk.Entry(mainframe, textvariable=session_id_sv)
     ltpa_token_text = Text(mainframe, height=6, width=1)
-    r1 = Radiobutton(mainframe, text="合同协议", value=1, variable=file_type_sv)
-    r2 = Radiobutton(mainframe, text="印章申请", value=2, variable=file_type_sv)
     output_path_entry = ttk.Entry(mainframe, textvariable=output_path_sv)
     #按钮
     button = ttk.Button(mainframe, text="确定", command=execute)
     #布局
     row_at = 0
-    readme.grid(row=row_at, column=0, columnspan=5, sticky=(W,N,E))
+    readme.grid(row=row_at, column=0, columnspan=4, sticky=(W,N,E))
     row_at += 1
     begin_date_label.grid(row=row_at, column=0, sticky=E)
     begin_date_entry.grid(row=row_at, column=1, columnspan=2, sticky=W)
     end_date_label.grid(row=row_at, column=1, sticky=E)
     end_date_entry.grid(row=row_at, column=2, columnspan=2, sticky=W)
-    Label(mainframe, text='合同类型:').grid(row=row_at, column=2, sticky=E)
-    r1.grid(row=row_at, column=3, sticky=W)
-    r2.grid(row=row_at, column=3, sticky=E)
 
     row_at += 1
     session_id_label.grid(row=row_at, column=0, sticky=E)
-    session_id_entry.grid(row=row_at, column=1, columnspan=3, sticky=(W,E))
+    session_id_entry.grid(row=row_at, column=1, columnspan=2, sticky=(W,E))
     row_at += 1
     ltpa_token_label.grid(row=row_at, column=0, sticky=E)
-    ltpa_token_text.grid(row=row_at, column=1, columnspan=3, sticky=(W,E))
+    ltpa_token_text.grid(row=row_at, column=1, columnspan=2, sticky=(W,E))
     row_at += 1
     output_path_label.grid(row=row_at, column=0, sticky=E)
-    output_path_entry.grid(row=row_at, column=1, columnspan=3, sticky=(W,E))
+    output_path_entry.grid(row=row_at, column=1, columnspan=2, sticky=(W,E))
     row_at += 1
     # 设置下载进度条
     Label(mainframe, text='解析进度:').grid(row=row_at, column=0, sticky=E)
     canvas = Canvas(mainframe, width=CANVAS_LENGTH, height=22, bg="white")
-    canvas.grid(row=row_at, column=1, columnspan=3, sticky=(W,E))
+    canvas.grid(row=row_at, column=1, columnspan=2, sticky=(W,E))
     row_at += 1
-    process_label.grid(row=row_at, column=1, columnspan=3, sticky=(W,E))
+    process_label.grid(row=row_at, column=1, columnspan=2, sticky=(W,E))
     row_at += 1
-    button.grid(row=row_at, column=2, sticky=W)
+    button.grid(row=row_at, column=1, columnspan=2)
     for child in mainframe.winfo_children():
         child.grid_configure(padx=5, pady=5)
-    # 初始化
-    file_type_sv.set(1)
 
+    # 初始化
     enddate = datetime.datetime.now()
     bgndate = enddate.replace(day=1)
     begin_date_sv.set(bgndate.strftime("%Y%m%d"))
