@@ -26,6 +26,8 @@ print ("2000 in list1: ", 2000 in list1)
 for x in list1: print(x, end=" ")
 print()
 
+print(1 not in list2)
+
 # 列表数组转换
 tuple = tuple(list2)
 print(tuple)

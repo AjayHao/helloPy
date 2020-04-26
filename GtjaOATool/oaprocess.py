@@ -10,7 +10,8 @@ import csv
 
 version_line = '\n\n-----------------------------\n'
 version_desc_arr = [
-    "V0.1.1 - 20200408: 导出列表增加“对方当事人名称”"
+    "V0.1.0 - 20200408: 导出列表增加“对方当事人名称”",
+    "V0.2.0 - 20200414: 导出列表”协议类型“，且筛选过滤'聘请律师协议', '人民币同业存款协议', '外聘服务协议', '银行结算帐户管理协议'四种协议"
 ]
 
 # 外部传入参数
@@ -30,6 +31,7 @@ oa_headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36',
     'Host': 'oa.gtja.net'
 }
+EXCEPT_LIST = ['聘请律师协议', '人民币同业存款协议', '外聘服务协议', '银行结算帐户管理协议']
 
 
 CANVAS_LENGTH = 600
@@ -117,8 +119,12 @@ def get_contract_detail(detail_obj):
     htmlobj = pq(htmlstr)
     tds = htmlobj('table.tableForm:eq(2) tr td').items()
     for td in tds:
-        if td.text() == '对方当事人全称':
-            contract_detail['dfdsrmc'] = td.next().text()
+        if td.text() == '协议类型':
+            contract_detail['xylx'] = td.next().remove('span').text()
+
+        # 因对方当事人名称字段可能被页面吞掉，改为td:合同金额往前追溯
+        if td.text() == '合同金额':
+            contract_detail['dfdsrmc'] = td.parent().prev().find('td.Title').next().text().strip()
             break
     return contract_detail
 
@@ -144,6 +150,7 @@ def get_process_track(detail_obj, contract_detail):
         track_list.append({
             'dfdsrmc': contract_detail['dfdsrmc'],
             'title': detail_obj['TODOTITLE'],
+            'xylx': contract_detail['xylx'],
             'clhj': pq(tds[0]).text(),
             'clr': pq(tds[1]).text(),
             'ddsj': pq(tds[2]).text(),
@@ -168,15 +175,15 @@ def write_file(path, text):
 # 导出excel表头
 def export_csv_header():
     with open(output_path + file_name, 'w', newline='') as csvfile:
-        fieldnames = ['dfdsrmc', 'title', 'clhj', 'clr', 'ddsj', 'fcsj']
+        fieldnames = ['dfdsrmc', 'title', 'xylx', 'clhj', 'clr', 'ddsj', 'fcsj']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writerow({'dfdsrmc': '对方当事人名称', 'title': '标题', 'clhj': '处理环节', 'clr': '处理人', 'ddsj': '到达时间', 'fcsj': '发出时间'})
+        writer.writerow({'dfdsrmc': '对方当事人名称', 'title': '标题', 'xylx': '协议类型', 'clhj': '处理环节', 'clr': '处理人', 'ddsj': '到达时间', 'fcsj': '发出时间'})
 
 
 # 导出excel
 def export_csv_content(data_list):
     with open(output_path + file_name, 'a', newline='') as csvfile:
-        fieldnames = ['dfdsrmc', 'title', 'clhj', 'clr', 'ddsj', 'fcsj']
+        fieldnames = ['dfdsrmc', 'title', 'xylx', 'clhj', 'clr', 'ddsj', 'fcsj']
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         for item in data_list:
             writer.writerow(item)
@@ -218,9 +225,11 @@ def execute():
         while idx < total:
             item = contract_list[idx]
             contract_detail = get_contract_detail(item)
-            track_list = get_process_track(item, contract_detail)
-            refresh_progress(idx+1, total, item['TODOTITLE'])
-            export_csv_content(track_list)
+            # 判断是否需要排除的协议类型
+            if contract_detail['xylx'] not in EXCEPT_LIST:
+                track_list = get_process_track(item, contract_detail)
+                refresh_progress(idx+1, total, item['TODOTITLE'])
+                export_csv_content(track_list)
             idx += 1
         # test
         #write_file(output_path + 'finalData.json', str(excel_list))
