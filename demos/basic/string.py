@@ -2,6 +2,7 @@
 
 a = "Hello"
 b = "Python"
+c = "Hello*Python\\"
 
 print("a + b 输出结果：", a + b)
 print("a * 2 输出结果：", a * 2)
@@ -17,6 +18,9 @@ if( "M" not in a) :
     print("M 不在变量 a 中")
 else :
     print("M 在变量 a 中")
+
+if "*" in c and "\\" in c:
+    print(f"char in {c}")
 
 print (r'\n')
 print (R'\n')
