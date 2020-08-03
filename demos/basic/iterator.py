@@ -17,3 +17,7 @@ myiter = iter(myclass)
 
 for x in myiter:
     print(x)
+
+
+for i in range(1, 1):
+    print(i)
