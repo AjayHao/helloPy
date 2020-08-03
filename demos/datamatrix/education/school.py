@@ -85,10 +85,10 @@ def add_school(new_school):
     session.close()
 
 
-def get_school_urls_by_page(cityno, typeno, pageno):
+def get_school_urls_by_page(city_url, typeno, pageno):
     def fn(link):
         return link.attr('href')
-    page_url = 'https://www.ruyile.com/xuexiao/?a={}&t={}&p={}'.format(cityno, typeno, pageno)
+    page_url = '{}&t={}&p={}'.format(city_url, typeno, pageno)
     print(page_url)
     response = requests.get(url=page_url)
     htmlstr = response.text
@@ -103,7 +103,7 @@ def pull_schools(cityno, typeno):
     for city_url in city_urls:
         max_page = get_total_pages(city_url)
         for i in range(1, max_page+1):
-            school_urls = get_school_urls_by_page(cityno, typeno, i)
+            school_urls = get_school_urls_by_page(city_url, typeno, i)
             for school_url in school_urls:
                 schoolobj = get_school_detail(school_url)
                 try:
