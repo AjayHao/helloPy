@@ -400,4 +400,3 @@ def ui_frame():
 # 主程序调用
 if __name__ == '__main__':
     ui_frame()
-    #write_file("C:\\Users\\AjayHao\\Desktop\\contract\\【AA类】 · S22922，宁聚满天星，补充协议（四）.html", "哎哎哎")
