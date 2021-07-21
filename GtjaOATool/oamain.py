@@ -10,7 +10,8 @@ import csv
 
 version_line = '\n\n-----------------------------\n'
 version_desc_arr = [
-    "V0.1.1 - 20200407: 调整“江伟总”为“公司领导”"
+    "V0.1.1 - 20200407: 调整“江伟总”为“公司领导”",
+    "V0.1.2 - 20210116: 调整“”"
 ]
 
 # 外部传入参数
@@ -29,21 +30,22 @@ output_path = ''
 ltpa_token_string = ''
 file_type = ''
 is_detail_output = False
+unique_set = set()
 oa_headers = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36',
     'Host': 'oa.gtja.net'
 }
+form_headers = {
+    'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36',
+    'Content-Type': 'application/x-www-form-urlencoded'
+}
 
 CANVAS_LENGTH = 600
-PAGE_SIZE = 100
+PAGE_SIZE = 10
 
 
 # 分页取数
 def get_contract_list_by_page(page_no):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/52.0.2743.116 Safari/537.36',
-        'Content-Type': 'application/x-www-form-urlencoded'
-    }
 
     url = 'https://link.gtja.net/link/common/oa/ajaxMappingHandler'
 
@@ -53,7 +55,9 @@ def get_contract_list_by_page(page_no):
                 "begindate": begin_date_sv.get().strip(),
                 "enddate": end_date_sv.get().strip(),
                 "fileclass_main": "OA",
-                "fileclass": file_type,   #OA006-合同协议 OA012-印章申请
+                # OA006-合同协议 OA012-印章申请
+                # 新OA：EOA005-合同协议 EOA006-印章申请
+                "fileclass": file_type,
                 "requester": "1"
             },
             "Type": "OA_TRANS_Q9902",
@@ -78,7 +82,7 @@ def get_contract_list_by_page(page_no):
     post_data = urlencode(post_param)
     post_url = url + '?' + urlencode(url_param)
     print(post_url)
-    response = requests.post(url=post_url, data=post_data, headers=headers)
+    response = requests.post(url=post_url, data=post_data, headers=form_headers)
     if response.status_code == 200:
         # test
         #write_file(fullpath=output_path+'列表返回结果.json', text=response.text)
@@ -102,13 +106,64 @@ def get_contract_list():
     return total_list
 
 
-# 抓取合同详情
-def get_contract_detail(detail_obj):
+# 抓取合同详情 - 新
+def get_contract_detail_new(detail_obj):
+    global unique_set
     ret = {'ngr': '',
            'sjjbr': '',
            'title': detail_obj['TODOTITLE'],
            'qcrfcsj': '',
-           'gsldfcsj': ''}
+           'gsldfcsj': '',
+           'unique': ''}
+
+    open_url = 'https://link.gtja.net/api/eoagw/eoaflow/flowCommon/flowApi?FLOW_MAIN_Q0001&funcId=FLOW_MAIN_Q0001'
+
+    post_param = {
+        "data": {
+            "Param": "{\"piid\":\"" + detail_obj['TODONO'] + "\"}",
+            "Type": "FLOW_MAIN_Q0001"
+        }
+    }
+
+    post_data = urlencode(post_param)
+    #cookies = {'LtpaToken': ltpa_token_string}
+    # 填抓包内容
+    # r.cookies.update(c)  # 更新cookies
+    response = requests.post(url=open_url, data=post_data, headers=form_headers)
+    if response.status_code == 200:
+        ret_json = response.json()
+        main_data = ret_json['Data']
+        tiid = main_data['instFlowTodoPersonList'][-1]['tiid']
+        detail_url = 'https://link.gtja.net/api/eoagw/eoaflow/flowCommon/flowApi?FLOW_MAINFORM_Q0001&funcId=FLOW_MAINFORM_Q0001'
+        detail_param = {
+            "data": {
+                "Param": {
+                    "piid": detail_obj['TODONO'],
+                    "tiid": tiid,
+                    "groupFlag": "FLOW_DOC_HTXY"
+                },
+                "Type": "FLOW_MAINFORM_Q0001"
+            }
+        }
+        detail_data = urlencode(detail_param)
+        detail_resp = requests.post(url=detail_url, cookies=cookies, data=detail_data, headers=form_headers)
+        if detail_resp.status_code == 200:
+            detail_obj = detail_resp.json()
+            detail_data = detail_obj['Data'][0]
+            ret['ngr'] = detail_data['TXQCR']
+            ret['sjjbr'] = detail_data['TXSJJBR']
+    return ret
+
+
+# 抓取合同详情
+def get_contract_detail_old(detail_obj):
+    global unique_set
+    ret = {'ngr': '',
+           'sjjbr': '',
+           'title': detail_obj['TODOTITLE'],
+           'qcrfcsj': '',
+           'gsldfcsj': '',
+           'unique': ''}
     open_url = detail_obj['TODOURL'].replace("editdocument", "opendocument")
     cookies = {'LtpaToken': ltpa_token_string}
     # 填抓包内容
@@ -118,7 +173,7 @@ def get_contract_detail(detail_obj):
     htmlstr = response.text
     # 需要输出详情
     if is_detail_output:
-        if file_type == 'OA006':
+        if file_type == 'EOA005':
             detail_html_prefix = '【合同协议详情】-'
         else:
             detail_html_prefix = '【印章申请详情】-'
@@ -133,13 +188,64 @@ def get_contract_detail(detail_obj):
         if td.text() == '实际经办人':
             ret['sjjbr'] = td.next().text()
 
-        if ret['ngr'] != '' and ret['sjjbr'] != '':
+        #唯一性校验
+        if td.text() == '文件编号':
+            key = td.next().text()
+            if key in unique_set:
+                ret['unique'] = '0'
+            else:
+                unique_set.add(key)
+                ret['unique'] = '1'
+
+        if ret['ngr'] != '' and ret['sjjbr'] != '' and ret['unique'] != '':
             break
     return ret
 
 
 # 抓取跟踪信息
-def get_process_track(detail_obj, contract_obj):
+def get_process_track_new(detail_obj, contract_obj):
+    track_url = 'https://link.gtja.net/api/eoagw/eoaflow/flowCommon/flowApi?FLOW_TRACE_Q0001&funcId=FLOW_TRACE_Q0001'
+
+    track_param = {
+        "data": {
+            "Param": {
+                "piid": detail_obj['TODONO']
+            },
+            "Type": "FLOW_TRACE_Q0001"
+        }
+    }
+    track_data = urlencode(track_param)
+    cookies = {'LtpaToken': ltpa_token_string}
+    response = requests.post(url=track_url, cookies=cookies, data=track_data, headers=form_headers)
+    if response.status_code == 200:
+        ret_json = response.json()
+        track_obj_list = ret_json['Data']
+        track_obj_list.reverse()
+        for track_obj in track_obj_list:
+            if track_obj['nodeName'] == '起草' and track_obj['sendTime'] != '':
+                st = datetime.datetime.strptime(track_obj['sendTime'],'%Y%m%d%H%M%S')
+                contract_obj['qcrfcsj'] = datetime.datetime.strftime(st, '%Y-%m-%d %H:%M:%S')
+
+            if file_type == 'EOA005':
+                if track_obj['nodeName'] == '部门负责人签署意见' and track_obj['sendTime'] != '':
+                    st = datetime.datetime.strptime(track_obj['sendTime'],'%Y%m%d%H%M%S')
+                    contract_obj['gsldfcsj'] = datetime.datetime.strftime(st, '%Y-%m-%d %H:%M:%S')
+            else:
+                if track_obj['nodeName'] == '公司领导批复' and track_obj['sendTime'] != '':
+                    st = datetime.datetime.strptime(track_obj['sendTime'],'%Y%m%d%H%M%S')
+                    contract_obj['gsldfcsj'] = datetime.datetime.strftime(st, '%Y-%m-%d %H:%M:%S')
+
+            if contract_obj['qcrfcsj'] != '' and contract_obj['gsldfcsj'] != '':
+                break
+    # test
+    # write_file('C:\\Users\\AjayHao\\Desktop\\contract\\ret.json', str(ret))
+    contract_obj['unique'] = '1'
+    print(str(contract_obj))
+    return contract_obj
+
+
+# 抓取跟踪信息
+def get_process_track_old(detail_obj, contract_obj):
     docid = detail_obj['TODONO']
     url = detail_obj['TODOURL']
     sidx = url.find('nsf')
@@ -151,7 +257,7 @@ def get_process_track(detail_obj, contract_obj):
     htmlstr = response.text
     # 需要输出详情
     if is_detail_output:
-        if file_type == 'OA006':
+        if file_type == 'EOA005':
             detail_html_prefix = '【合同协议跟踪信息】-'
         else:
             detail_html_prefix = '【印章申请跟踪信息】-'
@@ -163,8 +269,8 @@ def get_process_track(detail_obj, contract_obj):
         if (td.text() == '起草' or td.html() == '起草') and contract_obj['qcrfcsj'] == '':
             contract_obj['qcrfcsj'] = td.next().next().next().text()
 
-        if file_type == 'OA006':
-            if td.text() == '公司领导批示' or td.html() == '公司领导批示':
+        if file_type == 'EOA005':
+            if td.text() == '部门负责人签署意见' or td.html() == '部门负责人签署意见':
                 contract_obj['gsldfcsj'] = td.next().next().next().text()
         else:
             if td.text() == '公司领导批复' or td.html() == '公司领导批复':
@@ -193,6 +299,7 @@ def export_as_csv(data_list):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writerow({'ngr': '拟稿人', 'sjjbr': '实际经办人', 'title': '标题', 'qcrfcsj': '起草人处理发出时间', 'gsldfcsj': '公司领导发出时间'})
         for item in data_list:
+            del item['unique']
             writer.writerow(item)
 
 
@@ -226,9 +333,9 @@ def execute():
             is_detail_output = True
             # 查询文件类型
         if file_type_sv.get() == 1:
-            file_type = 'OA006'
+            file_type = 'EOA005'
         else:
-            file_type = 'OA012'
+            file_type = 'EOA006'
         leader_date_str = leader_date_sv.get()
 
         # 获得申请列表
@@ -243,9 +350,14 @@ def execute():
         total = len(contract_list)
         while idx < total:
             item = contract_list[idx]
-            ret_tuple = get_contract_detail(item)
-            get_process_track(item, ret_tuple)
-            if ret_tuple['gsldfcsj'] != '' and ret_tuple['gsldfcsj'] != '未结束':
+            if item['TODOURL'] != '' and item['TODOURL'].find('EOA') > 0:
+                ret_tuple = get_contract_detail_new(item)
+                get_process_track_new(item, ret_tuple)
+            else:
+                ret_tuple = get_contract_detail_old(item)
+                get_process_track_old(item, ret_tuple)
+
+            if ret_tuple['gsldfcsj'] != '' and ret_tuple['gsldfcsj'] != '未结束' and ret_tuple['unique'] == '1':
                 #excel_dict[ret_tuple['title']] = ret_tuple
                 # 判断公司领导时间是否落在这个区间  "%Y-%m-%d %H:%M:%S"
                 t1 = datetime.datetime.strptime(ret_tuple['gsldfcsj'],'%Y-%m-%d %H:%M:%S')
@@ -395,6 +507,7 @@ def ui_frame():
     draw_menu(win)
     draw_frame(win)
     win.mainloop()
+
 
 
 # 主程序调用

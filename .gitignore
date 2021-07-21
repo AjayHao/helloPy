@@ -9,3 +9,4 @@
 /build/**
 dist/
 /oamain.spec
+*.ipynb_checkpoints/
